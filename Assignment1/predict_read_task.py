@@ -21,20 +21,6 @@ def readCSV(path):
   for l in f:
     yield l.strip().split(',')
 
-
-
-def readGz(path):
-    for l in gzip.open(path, 'rt'):
-        yield eval(l)
-
-def readCSV(path):
-    f = gzip.open(path, 'rt')
-    f.readline()
-    for l in f:
-        u,b,r = l.strip().split(',')
-        r = int(r)
-        yield u,b,r
-
 def Jaccard(s1, s2):
     numer = len(s1.intersection(s2))
     denom = len(s1.union(s2))
@@ -42,9 +28,6 @@ def Jaccard(s1, s2):
         return numer/denom
     return 0
 
-# ************
-# Predict Read
-# ************
 def generateValidation(allRatings, ratingsValid):
     # Using ratingsValid, generate two sets:
     # readValid: set of (u,b) pairs in the validation set
@@ -69,17 +52,6 @@ def generateValidation(allRatings, ratingsValid):
             notRead.add((u, list(allItems - ratingsPerUser[u])[random.randint(0, len(allItems - ratingsPerUser[u]) - 1)]))
     return readValid, notRead
 
-def baseLineStrategy(mostPopular, totalRead):
-    # Compute the set of items for which we should return "True"
-    # This is the same strategy implemented in the baseline code for Assignment 1
-    return1 = set()
-    count = 0
-    for ic, i in mostPopular:
-        count += ic
-        return1.add(i)
-        if count > totalRead/2: break
-    return return1
-
 def improvedStrategy(mostPopular, totalRead):
     # Same as above function, just find an item set that'll have higher accuracy
     return1 = set()
@@ -87,7 +59,7 @@ def improvedStrategy(mostPopular, totalRead):
     for ic, i in mostPopular:
         count += ic
         return1.add(i)
-        if count > totalRead * 0.725: break
+        if count > totalRead * 0.726: break
     return return1
 
 def evaluateStrategy(return1, readValid, notRead):
@@ -107,7 +79,7 @@ def evaluateStrategy(return1, readValid, notRead):
         if i not in return1:
             correct += 1
 
-    return correct/total if total > 0 else 0
+    return correct / total if total > 0 else 0
 
 def jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
     # Compute the similarity of the query item (b) compared to the most similar item in the user's history
@@ -119,7 +91,7 @@ def jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
         if i == b:
             continue
         users_i = [x for x, _ in ratingsPerItem[i]]
-        sim = len(set(users_i) & set(users_b)) / len(set(users_i) | set(users_b))
+        sim = Jaccard(set(users_i), set(users_b))
         maxSim = max(maxSim, sim)
 
     if maxSim > 0.013 or len(ratingsPerItem[b]) > 40: # Keep these thresholds as-is
@@ -127,66 +99,76 @@ def jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
     return 0
 
 def predictRead():
-  allRatings = []
-  userRatings = defaultdict(list)
+    allRatings = []
+    userRatings = defaultdict(list)
 
-  for user,book,r in readCSV(f"{prefix}train_Interactions.csv.gz"):
-    allRatings.append((user,book,r))
-    userRatings[user].append(r)
+    for user,book,r in readCSV(f"{prefix}train_Interactions.csv.gz"):
+        allRatings.append((user,book,r))
+        userRatings[user].append(r)
 
-  train_split = 0.9
-  ratingsTrain = allRatings[:int(train_split * len(allRatings))]
-  ratingsValid = allRatings[int(train_split * len(allRatings)):]
+    train_split = 0.9
+    ratingsTrain = allRatings[:int(train_split * len(allRatings))]
+    ratingsValid = allRatings[int(train_split * len(allRatings)):]
+    
+    ratingsPerUser = defaultdict(list)
+    ratingsPerItem = defaultdict(list)
+    for u,b,r in ratingsTrain:
+        ratingsPerUser[u].append((b,r))
+        ratingsPerItem[b].append((u,r))
+
+    bookCount = defaultdict(int)
+    totalRead = 0
+
+    for user,book,_ in readCSV(f"{prefix}train_Interactions.csv.gz"):
+        bookCount[book] += 1
+        totalRead += 1
+
+    mostPopular = [(bookCount[x], x) for x in bookCount]
+    mostPopular.sort()
+    mostPopular.reverse()
+
+    # 50-50 split of validation set into read and not-read
+    readValid, notReadValid = generateValidation(allRatings, ratingsValid)
+    assert len(readValid) == len(notReadValid)
+    print(f"Validation set: {len(readValid)} reads and {len(notReadValid)} not-reads")
+
+    # acc = 0
+    # total = len(readValid) + len(notReadValid)
+    # print(f"Total validation instances: {total}")
+    # for u, b in readValid:
+    #     if jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
+    #         acc += 1
+    # for u, b in notReadValid:
+    #     if not jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
+    #         acc += 1
+    # print(f"Validation accuracy: {acc / total}")
+
+    return1 = improvedStrategy(mostPopular, totalRead)
+    valAcc = evaluateStrategy(return1, readValid, notReadValid)
+    print(f"Validation accuracy of improved strategy: {valAcc}")
   
-  ratingsPerUser = defaultdict(list)
-  ratingsPerItem = defaultdict(list)
-  for u,b,r in ratingsTrain:
-      ratingsPerUser[u].append((b,r))
-      ratingsPerItem[b].append((u,r))
+    # Removing previous file
+    if os.path.exists("predictions_Read.csv"):
+        os.remove("predictions_Read.csv")
+    
+    predictions = open("predictions_Read.csv", 'w')
+    
+    for l in open(f"{prefix}pairs_Read.csv"):
+        if l.startswith("userID"):
+            #header
+            predictions.write(l)
+            continue
+        u,b = l.strip().split(',')
 
-  bookCount = defaultdict(int)
-  totalRead = 0
+        # pred = jaccardThresh(u, b, ratingsPerItem, ratingsPerUser)
+        # predictions.write(u + ',' + b + f",{pred}\n")
+        # Predict '1' if book is in the return1 set
+        if b in return1:
+            predictions.write(u + ',' + b + f",1\n")
+        else:
+            predictions.write(u + ',' + b + f",0\n")
 
-  for user,book,_ in readCSV(f"{prefix}train_Interactions.csv.gz"):
-    bookCount[book] += 1
-    totalRead += 1
-
-  mostPopular = [(bookCount[x], x) for x in bookCount]
-  mostPopular.sort()
-  mostPopular.reverse()
-
-  # 50-50 split of validation set into read and not-read
-  readValid, notReadValid = generateValidation(allRatings, ratingsValid)
-  assert len(readValid) == len(notReadValid)
-  print(f"Validation set: {len(readValid)} reads and {len(notReadValid)} not-reads")
-
-  # Improved strategy
-  return1 = improvedStrategy(mostPopular, totalRead)
-  acc = evaluateStrategy(return1, readValid, notReadValid)
-  print(f"Improved strategy accuracy: {acc}")
-  
-  # Removing previous file
-  if os.path.exists("predictions_Read.csv"):
-     os.remove("predictions_Read.csv")
-  
-  predictions = open("predictions_Read.csv", 'w')
-  
-  for l in open(f"{prefix}pairs_Read.csv"):
-    if l.startswith("userID"):
-      #header
-      predictions.write(l)
-      continue
-    u,b = l.strip().split(',')
-
-    # pred = jaccardThresh(u, b, ratingsPerItem, ratingsPerUser)
-    # predictions.write(u + ',' + b + f",{pred}\n")
-    # Predict '1' if book is in the return1 set
-    if b in return1:
-      predictions.write(u + ',' + b + f",1\n")
-    else:
-      predictions.write(u + ',' + b + f",0\n")
-
-  predictions.close()
+    predictions.close()
 
 if __name__ == "__main__":
     predictRead()

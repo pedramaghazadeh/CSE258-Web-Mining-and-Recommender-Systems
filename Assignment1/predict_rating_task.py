@@ -1,9 +1,15 @@
 import os
+import math
+import scipy.optimize
 import numpy as np
+import string
+import random
 import gzip
 
 from collections import defaultdict
+from sklearn import linear_model
 
+prefix = "../datasets/assignment1/" # Change this to wherever you put the dataset
 
 def readGz(path):
   for l in gzip.open(path, 'rt'):
@@ -19,74 +25,76 @@ def readCSV(path):
 # Predict Rating
 # *************
 def getGlobalAverage(trainRatings):
-    # Return the average rating in the training set
-    return np.mean(trainRatings)
+  # Return the average rating in the training set
+  return np.mean(trainRatings)
 
 def trivialValidMSE(ratingsValid, globalAverage):
-    # Compute and return the MSE of a trivial model that always returns the global mean computed above
-    ratingsValid = [r[2] for r in ratingsValid]
-    return np.mean((np.array(ratingsValid) - globalAverage) ** 2)
+  # Compute and return the MSE of a trivial model that always returns the global mean computed above
+  ratingsValid = [r[2] for r in ratingsValid]
+  return np.mean((np.array(ratingsValid) - globalAverage) ** 2)
 
 # Our model is formalized as
 # rating(u,i) = alpha + betaU(u) + betaI(i)
 
 def alphaUpdate(ratingsTrain, alpha, betaU, betaI, lamb):
-    # Update equation for alpha
-    newAlpha = np.mean([r - betaU[u] - betaI[i] for u, i, r in ratingsTrain])
-    return newAlpha
+  # Update equation for alpha
+  newAlpha = np.mean([r - betaU[u] - betaI[i] for u, i, r in ratingsTrain])
+  return newAlpha
 
 def betaUUpdate(ratingsPerUser, alpha, betaU, betaI, lamb):
-    # Update equation for betaU
-    newBetaU = {}
-    for u in ratingsPerUser:
-        if u in betaU:
-            newBetaU[u] = np.sum([r[1] - alpha - betaI[r[0]] for r in ratingsPerUser[u]]) / (len(ratingsPerUser[u]) + lamb)
-    return newBetaU
+  # Update equation for betaU
+  newBetaU = {}
+  for u in ratingsPerUser:
+      if u in betaU:
+          newBetaU[u] = np.sum([r[1] - alpha - betaI[r[0]] for r in ratingsPerUser[u]]) / (len(ratingsPerUser[u]) + lamb)
+  return newBetaU
 
 def betaIUpdate(ratingsPerItem, alpha, betaU, betaI, lamb):
-    # Update equation for betaI
-    newBetaI = {}
-    for i in ratingsPerItem:
-        if i in betaI:
-            newBetaI[i] = np.sum([r[1] - alpha - betaU[r[0]] for r in ratingsPerItem[i]]) / (len(ratingsPerItem[i]) + lamb)
-    return newBetaI
+  # Update equation for betaI
+  newBetaI = {}
+  for i in ratingsPerItem:
+      if i in betaI:
+          newBetaI[i] = np.sum([r[1] - alpha - betaU[r[0]] for r in ratingsPerItem[i]]) / (len(ratingsPerItem[i]) + lamb)
+  return newBetaI
 
 def msePlusReg(ratingsTrain, alpha, betaU, betaI, lamb):
-    # Compute the MSE and the mse+regularization term
-    mse = np.mean([(r[2] - alpha - betaU[r[0]] - betaI[r[1]]) ** 2 for r in ratingsTrain])
-    regularizer = sum([b ** 2 for b in betaU.values()]) + sum([b ** 2 for b in betaI.values()])
-    return mse, mse + lamb*regularizer
+  # Compute the MSE and the mse+regularization term
+  mse = np.mean([(r[2] - alpha - betaU[r[0]] - betaI[r[1]]) ** 2 for r in ratingsTrain])
+  regularizer = sum([b ** 2 for b in betaU.values()]) + sum([b ** 2 for b in betaI.values()])
+  return mse, mse + lamb*regularizer
 
 def validMSE(ratingsValid, alpha, betaU, betaI):
-    # Compute the MSE on the validation set
-    validMSE = np.mean([(r[2] - alpha - betaU.get(r[0],0) - betaI.get(r[1],0)) ** 2 for r in ratingsValid])
-    return validMSE
+  # Compute the MSE on the validation set
+  validMSE = np.mean([(r[2] - alpha - betaU.get(r[0],0) - betaI.get(r[1],0)) ** 2 for r in ratingsValid])
+  return validMSE
 
 def Iteratetrain(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, lamb, N, ratingsValid):
-    for i in range(N):
-        alpha = alphaUpdate(ratingsTrain, alpha, betaU, betaI, lamb)
-        betaU = betaUUpdate(ratingsPerUser, alpha, betaU, betaI, lamb)
-        betaI = betaIUpdate(ratingsPerItem, alpha, betaU, betaI, lamb)
-        mse, mseReg = msePlusReg(ratingsTrain, alpha, betaU, betaI, lamb)
+  best_vali_mse = float('inf')
+  for i in range(N):
+    alpha = alphaUpdate(ratingsTrain, alpha, betaU, betaI, lamb)
+    betaU = betaUUpdate(ratingsPerUser, alpha, betaU, betaI, lamb)
+    betaI = betaIUpdate(ratingsPerItem, alpha, betaU, betaI, lamb)
+    mse, mseReg = msePlusReg(ratingsTrain, alpha, betaU, betaI, lamb)
 
-        vali_mse = validMSE(ratingsValid, alpha, betaU, betaI)
-        print(f"Iteration {i+1}: Train MSE: {mse}, Train MSE+Reg: {mseReg}, Valid MSE: {vali_mse}")
-    return alpha, betaU, betaI, mse, mseReg
+    vali_mse = validMSE(ratingsValid, alpha, betaU, betaI)
+    print(f"Iteration {i+1}: Train MSE: {mse}, Train MSE+Reg: {mseReg}, Valid MSE: {vali_mse}")
+    if vali_mse < best_vali_mse:
+        best_vali_mse = vali_mse
+        print(f"  New best model found at iteration {i+1} with Valid MSE: {vali_mse}")
+  return alpha, betaU, betaI, mse, mseReg
 
 def goodModel(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, ratingsValid):
-    # Improve upon your model from the previous question (e.g. by running multiple iterations)
-    alpha, betaU, betaI, mse, mseReg = Iteratetrain(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, 5.0, 30, ratingsValid)
-    return alpha, betaU, betaI
-
-prefix = "../datasets/assignment1/" # Change this to wherever you put the dataset
+  # Improve upon your model from the previous question (e.g. by running multiple iterations)
+  alpha, betaU, betaI, mse, mseReg = Iteratetrain(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, 5.0, 220, ratingsValid)
+  return alpha, betaU, betaI
 
 def predictRating():
   allRatings = []
   userRatings = defaultdict(list)
 
   for user,book,r in readCSV(f"{prefix}train_Interactions.csv.gz"):
-    allRatings.append((user,book,r))
-    userRatings[user].append(r)
+    allRatings.append((user, book, float(r)))
+    userRatings[user].append(float(r))
 
   ratingsTrain = allRatings[:190000]
   ratingsValid = allRatings[190000:]
@@ -138,4 +146,4 @@ def predictRating():
   predictions.close()
 
 if __name__ == "__main__":
-  predictRating()
+    predictRating()
