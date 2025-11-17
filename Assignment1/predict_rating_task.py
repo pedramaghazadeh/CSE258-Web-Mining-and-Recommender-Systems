@@ -119,9 +119,10 @@ def predictRating():
   for b in ratingsPerItem:
       betaI[b] = 0
 
-  alpha = globalAverage # Could initialize anywhere, this is a guess
+  alpha = globalAverage + 1
   alpha, betaU, betaI = goodModel(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, ratingsValid)
 
+  K_DAMPING = 10.0
   # Removing previous file
   if os.path.exists("predictions_Rating.csv"):
      os.remove("predictions_Rating.csv")
@@ -134,16 +135,21 @@ def predictRating():
     u,b = l.strip().split(',')
     if u in betaU and b in betaI:
       pred = alpha + betaU[u] + betaI[b]
-      if pred < 0: pred = 0
-      if pred > 5: pred = 5
-      predictions.write(u + ',' + b + ',' + str(pred) + '\n')
+    elif u in userAverage:
+      # Case 2: User seen, but item is new.
+      # Use damped user average instead of simple user average.
+      pred = (sum(userRatings[u]) + K_DAMPING * globalAverage) / (len(userRatings[u]) + K_DAMPING)
     else:
-      if u in userAverage:
-        predictions.write(u + ',' + b + ',' + str(userAverage[u]) + '\n')
-      else:
-        predictions.write(u + ',' + b + ',' + str(globalAverage) + '\n')
+      # Case 3: User and Item are both cold. Use global average.
+      pred = globalAverage
+    
+    # Clip predictions
+    if pred < 0: pred = 0
+    if pred > 5: pred = 5
+    predictions.write(u + ',' + b + ',' + str(pred) + '\n')
 
   predictions.close()
+  print("\npredictions_Rating.csv file generated successfully.")
 
 if __name__ == "__main__":
     predictRating()

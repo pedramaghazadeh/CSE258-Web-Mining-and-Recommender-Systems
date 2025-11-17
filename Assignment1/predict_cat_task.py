@@ -9,6 +9,7 @@ import gzip
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import FeatureUnion
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import Normalizer
 from collections import defaultdict
 from sklearn import linear_model
 
@@ -47,8 +48,8 @@ PREPROCESSING_OPTIONS = {
     "ngram_range": (1, 3),
     "max_features": None,      # None = unlimited
     "sublinear_tf": True,
-    "min_df": 2,               # remove rare words
-    "max_df": 0.90             # remove overly common words
+    "min_df": 3,               # remove rare words
+    "max_df": 0.85             # remove overly common words
 }
 
 stemmer = PorterStemmer()
@@ -136,6 +137,7 @@ def predictCat():
     ])
 
     X_all = tfidf.fit_transform(corpus_train)
+    X_all = Normalizer(norm="l2").fit_transform(X_all)
 
     # -------------------------
     # Train/Validation split
@@ -155,10 +157,10 @@ def predictCat():
     # Logistic Regression
     # -------------------------
     mod = linear_model.LogisticRegression(
-        C=10,
+        C=1.2,
         penalty='l2',
         solver='liblinear',
-        max_iter=30,
+        max_iter=30000,
         verbose=1,
         class_weight='balanced',
         n_jobs=-1
@@ -175,17 +177,17 @@ def predictCat():
     # -------------------------
     # Output Predictions
     # -------------------------
-    if os.path.exists("predictions_Category.csv"):
-        os.remove("predictions_Category.csv")
+    # if os.path.exists("predictions_Category.csv"):
+    #     os.remove("predictions_Category.csv")
 
-    predictions = open("predictions_Category.csv", 'w')
-    predictions.write("userID,reviewID,prediction\n")
+    # predictions = open("predictions_Category.csv", 'w')
+    # predictions.write("userID,reviewID,prediction\n")
 
-    for ind, l in enumerate(data_test):
-        predictions.write(l['user_id'] + ',' + l['review_id'] + "," + str(pred_test[ind]) + "\n")
-    predictions.close()
+    # for ind, l in enumerate(data_test):
+    #     predictions.write(l['user_id'] + ',' + l['review_id'] + "," + str(pred_test[ind]) + "\n")
+    # predictions.close()
 
-    print("Done. Output saved to predictions_Category.csv")
+    # print("Done. Output saved to predictions_Category.csv")
 
 
 if __name__ == "__main__":
