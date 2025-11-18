@@ -116,7 +116,7 @@ def predictRating(prefix = "../datasets/assignment1/"):
   alpha = globalAverage + 1
   alpha, betaU, betaI = goodModel(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, ratingsValid)
 
-  K_DAMPING = 10.0
+  K_DAMPING = 30.0
   # Removing previous file
   if os.path.exists("predictions_Rating.csv"):
      os.remove("predictions_Rating.csv")
