@@ -1,15 +1,9 @@
 import os
-import math
-import scipy.optimize
-import numpy as np
-import string
-import random
 import gzip
 
-from collections import defaultdict
-from sklearn import linear_model
+import numpy as np
 
-prefix = "../datasets/assignment1/" # Change this to wherever you put the dataset
+from collections import defaultdict
 
 def readGz(path):
   for l in gzip.open(path, 'rt'):
@@ -88,7 +82,7 @@ def goodModel(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI,
   alpha, betaU, betaI, mse, mseReg = Iteratetrain(ratingsTrain, ratingsPerUser, ratingsPerItem, alpha, betaU, betaI, 5.0, 220, ratingsValid)
   return alpha, betaU, betaI
 
-def predictRating():
+def predictRating(prefix = "../datasets/assignment1/"):
   allRatings = []
   userRatings = defaultdict(list)
 

@@ -1,15 +1,8 @@
 import os
-import math
-import scipy.optimize
-import numpy as np
-import string
 import random
 import gzip
 
 from collections import defaultdict
-from sklearn import linear_model
-
-prefix = "../datasets/assignment1/" # Change this to wherever you put the dataset
 
 def readGz(path):
   for l in gzip.open(path, 'rt'):
@@ -98,7 +91,7 @@ def jaccardThresh(u, b, ratingsPerItem, ratingsPerUser):
         return 1
     return 0
 
-def predictRead():
+def predictRead(prefix = "../datasets/assignment1/"):
     allRatings = []
     userRatings = defaultdict(list)
 

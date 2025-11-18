@@ -31,9 +31,6 @@ try:
 except:
     nltk.download("wordnet")
 
-prefix = "../datasets/assignment1/"
-
-
 # --------------------------------------
 # CONFIGURABLE PREPROCESSING PIPELINE
 # --------------------------------------
@@ -97,7 +94,7 @@ def readCSV(path):
 # =================================================================
 # CATEGORY PREDICTION
 # =================================================================
-def predictCat():
+def predictCat(prefix = "../datasets/assignment1/"):
 
     # -------------------------
     # Load training data
